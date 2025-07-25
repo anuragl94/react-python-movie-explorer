@@ -7,7 +7,8 @@ export default function MovieFilters({ onChange }) {
     title: "",
     director: "",
     cast: "",
-    genre: ""
+    genre: "",
+    year: "",
   });
   return (
     <>
@@ -34,6 +35,10 @@ export default function MovieFilters({ onChange }) {
         <label>
           <div>Genre</div>
           <input type="text" onChange={e => setFilters(f => ({ ...f, genre: e.target.value }))}></input>
+        </label>
+        <label>
+          <div>Release year</div>
+          <input type="number" onChange={e => setFilters(f => ({ ...f, year: e.target.value }))}></input>
         </label>
         <button onClick={() => onChange(filters)}>Apply</button>
       </div>

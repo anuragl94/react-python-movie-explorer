@@ -9,7 +9,8 @@ export default function Movies() {
     title: "",
     director: "",
     cast: "",
-    genre: ""
+    genre: "",
+    year: ""
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState();

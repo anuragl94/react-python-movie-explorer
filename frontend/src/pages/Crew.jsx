@@ -24,13 +24,17 @@ export default function Movie() {
       {data.length ? (
         <>
           <header><h1>{personalDetails?.name}</h1></header>
-          <h2>Director of</h2>
           {moviesDirectedbyPerson.length ? (
-            <Gallery movies={moviesDirectedbyPerson} />
+            <>
+              <h2>Director of</h2>
+              <Gallery movies={moviesDirectedbyPerson} />
+            </>
           ) : null}
-          <h2>Starred in</h2>
-          {moviesDirectedbyPerson.length ? (
-            <Gallery movies={moviesStarringPerson} />
+          {moviesStarringPerson.length ? (
+            <>
+              <h2>Starred in</h2>
+              <Gallery movies={moviesStarringPerson} />
+            </>
           ) : null}
         </>
       ) : isLoading ? (

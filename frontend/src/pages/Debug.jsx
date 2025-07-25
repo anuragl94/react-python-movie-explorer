@@ -4,12 +4,15 @@ import { createCrewMember, listCrew } from "../models/crew";
 import { createGenre, listGenres } from "../models/genre";
 import { createMovie } from "../models/movie";
 
-import { TEST_PRESET } from "../data/moviePresetData";
+import { TEST_PRESET, PRESET1 } from "../data/moviePresetData";
 
 // This function will make sure duplicate entries are not created for director/cast/genre
 async function createMovieSmartly(data, logger) {
   const {
     title,
+    poster,
+    year,
+    rating,
     overview,
     director,
     cast,
@@ -51,9 +54,12 @@ async function createMovieSmartly(data, logger) {
     directorId = existingData[0].id;
   }
 
-  logger("Creating moview data");
+  logger("Creating movie data");
   await createMovie({
     title,
+    posterUrl: poster,
+    releaseYear: year,
+    audienceRating: rating,
     description: overview,
     directorId: directorId,
     castIds: castIds,
@@ -90,6 +96,7 @@ export default function Debug() {
 
   return (
     <main>
+      <h1>Debug page</h1>
       <p>
         To make it easier to populate the content, I have created a few presets to populate the DB with.
       </p>
@@ -101,7 +108,7 @@ export default function Debug() {
       </p>
       <div className="button-group">
         <button onClick={() => loadPreset(TEST_PRESET, outputLogRef?.current)}>Load Test Preset</button>
-        <button>Load Preset 1</button>
+        <button onClick={() => loadPreset(PRESET1, outputLogRef?.current)}>Load Preset 1</button>
         <button onClick={() => clearDB(outputLogRef?.current)}>Clear DB</button>
       </div>
       <div className="output" ref={outputLogRef}></div>

@@ -3,6 +3,7 @@ from db import db
 from models import Item, MovieIn, MovieOut, CrewIn, CrewOut, GenreIn, GenreOut, RoleIn, RoleOut, MovieFilter, CrewRef, GenreRef
 from typing import List, Optional
 from bson import ObjectId
+from pydantic import HttpUrl, ValidationError
 
 app = FastAPI()
 
@@ -51,6 +52,25 @@ def movie_filter(
         genre=split_csv(genre),
     )
 
+def safe_url(url):
+    if url is None:
+        return None
+    try:
+        return str(HttpUrl(url))
+    except (ValidationError, ValueError):
+        return None
+
+def safe_rating(rating):
+    if rating is None:
+        return None
+    try:
+        rating = int(rating)
+        if 1 <= rating <= 100:
+            return rating
+    except Exception:
+        pass
+    return None
+
 @app.get("/heartbeat")
 async def heartbeat():
     return {"message": "Server is active"}
@@ -59,6 +79,7 @@ async def heartbeat():
 async def list_movies(
     title: Optional[str] = Query(None, description="Partial movie title (case-insensitive)"),
     description: Optional[str] = Query(None, description="Exact movie description"),
+    release_year: Optional[int] = Query(None, description="Year the movie was released"),
     directed_by_ids: Optional[List[str]] = Query(
         None,
         description="One or more director IDs (comma-separated or repeated)",
@@ -91,7 +112,7 @@ async def list_movies(
     )
 ):
     """
-    List all movies, optionally filtered by title, description, director(s), cast member(s), and genre(s).
+    List all movies, optionally filtered by title, description, release_year, director(s), cast member(s), and genre(s).
     Use repeated or comma-separated values for *_ids fields.
     """
     query = {}
@@ -99,6 +120,8 @@ async def list_movies(
         query["title"] = {"$regex": title, "$options": "i"}
     if description:
         query["description"] = description
+    if release_year is not None:
+        query["release_year"] = release_year
     if directed_by_ids:
         try:
             director_obj_ids = [ObjectId(did) for did in split_csv(directed_by_ids)]
@@ -135,6 +158,9 @@ async def list_movies(
             id=str(movie["_id"]),
             title=movie["title"],
             description=movie.get("description"),
+            release_year=movie.get("release_year"),
+            image_url=safe_url(movie.get("image_url")),
+            user_rating=safe_rating(movie.get("user_rating")),
             directed_by=directed_by,
             cast=cast,
             genre=genre,
@@ -143,6 +169,19 @@ async def list_movies(
 
 @app.post("/api/movies", response_model=MovieOut, status_code=201)
 async def create_movie(movie: MovieIn):
+    """
+    Create a new movie with the following fields:
+    - title: Movie title (required)
+    - description: Movie description (optional)
+    - release_year: Year the movie was released (required, integer)
+    - image_url: URL to movie poster/image (optional, must be valid HTTP/HTTPS URL)
+    - user_rating: User rating 1-100 (optional, integer)
+    - directed_by: Director's crew ID (required, MongoDB ObjectId as string)
+    - cast: List of cast member IDs (required, list of MongoDB ObjectIds as strings)
+    - genre: List of genre IDs (required, list of MongoDB ObjectIds as strings)
+    
+    All referenced IDs (directed_by, cast, genre) must exist in their respective collections.
+    """
     # Validate referenced IDs
     if not ObjectId.is_valid(movie.directed_by):
         raise HTTPException(status_code=400, detail="Invalid directed_by id")
@@ -154,15 +193,22 @@ async def create_movie(movie: MovieIn):
             raise HTTPException(status_code=400, detail="Invalid genre id")
     # Check existence
     if not await db["crew"].find_one({"_id": ObjectId(movie.directed_by)}):
-        raise HTTPException(status_code=404, detail="directed_by crew not found")
+        raise HTTPException(status_code=404, detail="Directed_by crew not found")
     if await db["crew"].count_documents({"_id": {"$in": [ObjectId(cid) for cid in movie.cast]}}) != len(movie.cast):
         raise HTTPException(status_code=404, detail="One or more cast members not found")
     if await db["genre"].count_documents({"_id": {"$in": [ObjectId(gid) for gid in movie.genre]}}) != len(movie.genre):
         raise HTTPException(status_code=404, detail="One or more genres not found")
-    doc = movie.dict()
+    doc = movie.dict(exclude_unset=True)
+    # Convert HttpUrl to string for MongoDB storage
+    if "image_url" in doc and doc["image_url"] is not None:
+        doc["image_url"] = str(doc["image_url"])
     doc["directed_by"] = ObjectId(doc["directed_by"])
     doc["cast"] = [ObjectId(cid) for cid in doc["cast"]]
     doc["genre"] = [ObjectId(gid) for gid in doc["genre"]]
+    # Ensure all fields are present
+    doc.setdefault("image_url", None)
+    doc.setdefault("user_rating", None)
+    doc.setdefault("release_year", None)
     result = await db["movies"].insert_one(doc)
     # Fetch full directed_by object
     directed_by_doc = await db["crew"].find_one({"_id": doc["directed_by"]})
@@ -179,6 +225,9 @@ async def create_movie(movie: MovieIn):
         id=str(result.inserted_id),
         title=movie.title,
         description=movie.description,
+        release_year=movie.release_year,
+        image_url=safe_url(doc.get("image_url")),
+        user_rating=safe_rating(doc.get("user_rating")),
         directed_by=directed_by,
         cast=cast,
         genre=genre,
@@ -205,11 +254,13 @@ async def get_movie(movie_id: str = Path(..., description="MongoDB ObjectId of t
     # Fetch full genre objects
     genre_docs = db["genre"].find({"_id": {"$in": movie["genre"]}})
     genre = [GenreRef(id=str(doc["_id"]), name=doc["name"]) async for doc in genre_docs]
-    # Return MovieOut with full objects for related fields
     return MovieOut(
         id=str(movie["_id"]),
         title=movie["title"],
         description=movie.get("description"),
+        release_year=movie.get("release_year"),
+        image_url=safe_url(movie.get("image_url")),
+        user_rating=safe_rating(movie.get("user_rating")),
         directed_by=directed_by,
         cast=cast,
         genre=genre,

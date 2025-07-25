@@ -1,5 +1,5 @@
 from fastapi import Query
-from pydantic import BaseModel, HttpUrl, Field
+from pydantic import BaseModel, HttpUrl, Field, conint
 from typing import Optional, List
 
 # Shared base for MongoDB id
@@ -30,6 +30,9 @@ class GenreRef(BaseModel):
 class MovieBase(BaseModel):
     title: str
     description: Optional[str] = None
+    release_year: int = Field(..., description="Year the movie was released in")
+    image_url: Optional[HttpUrl] = Field(None, description="URL to the movie's poster or image")
+    user_rating: Optional[conint(ge=1, le=100)] = Field(None, description="User rating between 1 and 100")
 
 class MovieIn(MovieBase):
     directed_by: str  # MongoDB ObjectId as string
@@ -44,8 +47,9 @@ class MovieOut(MovieBase, MongoModel):
 class MovieFilter(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
-    directed_by: Optional[List[str]] = None  # Accept multiple director ids
-    cast: Optional[List[str]] = None         # Accept multiple cast ids
+    release_year: Optional[int] = Field(None, description="Year the movie was released in")
+    directed_by: Optional[List[str]] = None  # Accepts multiple director ids
+    cast: Optional[List[str]] = None         # Accepts multiple cast ids
     genre: Optional[List[str]] = None
 
 # Crew (Everyone involved with a movie)
