@@ -4,11 +4,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
-    working_dir: /app
-    command: ["npm", "run"]
-    volumes:
-      - ./frontend:/app
+      - "3000:80"
     depends_on:
       - backend
 
@@ -19,6 +15,8 @@ services:
     ports:
       - "8000:8000"
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      - MONGO_URI=mongodb://mongo:27017
     volumes:
       - ./backend:/app
     depends_on:
