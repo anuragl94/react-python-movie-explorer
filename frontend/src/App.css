@@ -1,6 +1,54 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+}
+
+main {
+  width: 100%;
+  max-width: 1400px;
+  margin-inline: auto;
   text-align: center;
+  container-type: inline-size;
+}
+
+.card {
+  --radius: 8px;
+  border: 1px solid;
+  border-radius: var(--radius);
+  padding: var(--radius);
+  position: relative;
+
+  &:has(.card) {
+    --radius: 16px;
+  }
+}
+
+.gallery {
+  --column-count: 4;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(var(--column-count), 1fr);
+}
+
+@container(width < 1200px) {
+  .gallery {
+    --column-count: 3;
+  }
+}
+
+@container(width < 800px) {
+  .gallery {
+    --column-count: 2;
+  }
+}
+
+@container(width < 480px) {
+  .gallery {
+    --column-count: 1;
+  }
+}
+
+.image-thumb {
+  aspect-ratio: 16/9;
 }
