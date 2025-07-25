@@ -6,6 +6,7 @@ nav {
 
 main {
   width: 100%;
+  padding-block: 64px;
   max-width: 1400px;
   margin-inline: auto;
   text-align: center;
@@ -51,4 +52,80 @@ main {
 
 .image-thumb {
   aspect-ratio: 16/9;
+}
+
+nav {
+  z-index: 999;
+  background-color: var(--color-bg-darker);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 32px 16px;
+  position: fixed;
+  width: 20ch;
+  min-height: 2em;
+  border-radius: 0 12px 12px 0;
+  left: 0;
+  top: 50%;
+  translate: 0 -50%;
+  transition: translate 300ms ease-in-out;
+  border: 1px solid;
+  border-left-width: 0;
+
+  &.collapsed {
+    translate: -100% -50%;
+  }
+}
+
+.nav-handle {
+  z-index: 99;
+  position: fixed;
+  left: 0;
+  top: 50%;
+  translate: 0 -50%;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  height: 4em;
+  width: 4em;
+}
+
+.close-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.filter-panel {
+  z-index: 999;
+  background-color: var(--color-bg-darker);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 32px 16px;
+  position: fixed;
+  width: 20ch;
+  min-height: 2em;
+  border-radius: 12px 0 0 12px;
+  right: 0;
+  top: 50%;
+  translate: 0 -50%;
+  transition: translate 300ms ease-in-out;
+  border: 1px solid;
+  border-right-width: 0;
+
+  &.collapsed {
+    translate: 100% -50%;
+  }
+}
+
+.filter-handle {
+  z-index: 99;
+  position: fixed;
+  right: 0;
+  top: 50%;
+  translate: 0 -50%;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  height: 4em;
+  width: 4em;
 }

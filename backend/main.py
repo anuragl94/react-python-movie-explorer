@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query, Depends, Path
 from db import db
-from models import Item, MovieIn, MovieOut, CrewIn, CrewOut, GenreIn, GenreOut, RoleIn, RoleOut, MovieFilter
+from models import Item, MovieIn, MovieOut, CrewIn, CrewOut, GenreIn, GenreOut, RoleIn, RoleOut, MovieFilter, CrewRef, GenreRef
 from typing import List, Optional
 from bson import ObjectId
 
@@ -27,20 +27,28 @@ def parse_objectid_list(id_list):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid ObjectId in list")
 
+def split_csv(values: Optional[List[str]]) -> Optional[List[str]]:
+    if values is None:
+        return None
+    result = []
+    for v in values:
+        result.extend([x for x in v.split(',') if x])
+    return result if result else None
+
 # TODO: Find a cleaner way?
 def movie_filter(
     title: Optional[str] = Query(None),
     description: Optional[str] = Query(None),
-    directed_by: Optional[str] = Query(None),
+    directed_by: Optional[List[str]] = Query(None),
     cast: Optional[List[str]] = Query(None),
     genre: Optional[List[str]] = Query(None),
 ) -> MovieFilter:
     return MovieFilter(
         title=title,
         description=description,
-        directed_by=directed_by,
-        cast=cast,
-        genre=genre,
+        directed_by=split_csv(directed_by),
+        cast=split_csv(cast),
+        genre=split_csv(genre),
     )
 
 @app.get("/heartbeat")
@@ -49,52 +57,88 @@ async def heartbeat():
 
 @app.get("/api/movies", response_model=List[MovieOut])
 async def list_movies(
-    filter: MovieFilter = Depends(movie_filter),
-    cast_id: Optional[str] = Query(None, description="MongoDB ObjectId of a cast member to filter movies by"),
-    genre_id: Optional[str] = Query(None, description="MongoDB ObjectId of a genre to filter movies by")
+    title: Optional[str] = Query(None, description="Partial movie title (case-insensitive)"),
+    description: Optional[str] = Query(None, description="Exact movie description"),
+    directed_by_ids: Optional[List[str]] = Query(
+        None,
+        description="One or more director IDs (comma-separated or repeated)",
+        openapi_extra={
+            "examples": [
+                {"summary": "Multiple directors (comma-separated)", "value": "id1,id2"},
+                {"summary": "Multiple directors (repeated)", "value": ["id1", "id2"]}
+            ]
+        }
+    ),
+    cast_ids: Optional[List[str]] = Query(
+        None,
+        description="One or more cast member IDs (comma-separated or repeated)",
+        openapi_extra={
+            "examples": [
+                {"summary": "Multiple cast (comma-separated)", "value": "id1,id2"},
+                {"summary": "Multiple cast (repeated)", "value": ["id1", "id2"]}
+            ]
+        }
+    ),
+    genre_ids: Optional[List[str]] = Query(
+        None,
+        description="One or more genre IDs (comma-separated or repeated)",
+        openapi_extra={
+            "examples": [
+                {"summary": "Multiple genres (comma-separated)", "value": "id1,id2"},
+                {"summary": "Multiple genres (repeated)", "value": ["id1", "id2"]}
+            ]
+        }
+    )
 ):
     """
-    List all movies, optionally filtered by any combination of fields in MovieFilter.
-    You can also filter by a single cast member's id or genre's id using the 'cast_id' or 'genre_id' query parameters.
-    Returns MovieOut with related names populated.
+    List all movies, optionally filtered by title, description, director(s), cast member(s), and genre(s).
+    Use repeated or comma-separated values for *_ids fields.
     """
     query = {}
-    if filter.title:
-        query["title"] = filter.title
-    if filter.description:
-        query["description"] = filter.description
-    if filter.directed_by:
-        if not ObjectId.is_valid(filter.directed_by):
-            raise HTTPException(status_code=400, detail="Invalid directed_by id")
-        query["directed_by"] = ObjectId(filter.directed_by)
-    if filter.cast:
-        query["cast"] = {"$all": parse_objectid_list(filter.cast)}
-    if cast_id:
-        if not ObjectId.is_valid(cast_id):
-            raise HTTPException(status_code=400, detail="Invalid cast_id")
-        query["cast"] = ObjectId(cast_id)
-    if filter.genre:
-        query["genre"] = {"$all": parse_objectid_list(filter.genre)}
-    if genre_id:
-        if not ObjectId.is_valid(genre_id):
-            raise HTTPException(status_code=400, detail="Invalid genre_id")
-        query["genre"] = ObjectId(genre_id)
+    if title:
+        query["title"] = {"$regex": title, "$options": "i"}
+    if description:
+        query["description"] = description
+    if directed_by_ids:
+        try:
+            director_obj_ids = [ObjectId(did) for did in split_csv(directed_by_ids)]
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid directed_by id(s)")
+        query["directed_by"] = {"$in": director_obj_ids}
+    if cast_ids:
+        try:
+            cast_obj_ids = [ObjectId(cid) for cid in split_csv(cast_ids)]
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid cast id(s)")
+        query["cast"] = {"$all": cast_obj_ids}
+    if genre_ids:
+        try:
+            genre_obj_ids = [ObjectId(gid) for gid in split_csv(genre_ids)]
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid genre id(s)")
+        query["genre"] = {"$all": genre_obj_ids}
     movies = []
     cursor = db["movies"].find(query)
     async for movie in cursor:
-        # Populate names for related fields
+        # Fetch full directed_by object
         directed_by_doc = await db["crew"].find_one({"_id": movie["directed_by"]})
+        directed_by = None
+        if directed_by_doc:
+            directed_by = CrewRef(id=str(directed_by_doc["_id"]), name=directed_by_doc["name"])
+        # Fetch full cast objects
         cast_docs = db["crew"].find({"_id": {"$in": movie["cast"]}})
+        cast = [CrewRef(id=str(doc["_id"]), name=doc["name"]) async for doc in cast_docs]
+        # Fetch full genre objects
         genre_docs = db["genre"].find({"_id": {"$in": movie["genre"]}})
-        movie_out = MovieOut(
+        genre = [GenreRef(id=str(doc["_id"]), name=doc["name"]) async for doc in genre_docs]
+        movies.append(MovieOut(
             id=str(movie["_id"]),
             title=movie["title"],
             description=movie.get("description"),
-            directed_by=directed_by_doc["name"] if directed_by_doc else None,
-            cast=[doc["name"] async for doc in cast_docs],
-            genre=[doc["name"] async for doc in genre_docs],
-        )
-        movies.append(movie_out)
+            directed_by=directed_by,
+            cast=cast,
+            genre=genre,
+        ))
     return movies
 
 @app.post("/api/movies", response_model=MovieOut, status_code=201)
@@ -110,7 +154,7 @@ async def create_movie(movie: MovieIn):
             raise HTTPException(status_code=400, detail="Invalid genre id")
     # Check existence
     if not await db["crew"].find_one({"_id": ObjectId(movie.directed_by)}):
-        raise HTTPException(status_code=404, detail="directed_by value not found")
+        raise HTTPException(status_code=404, detail="directed_by crew not found")
     if await db["crew"].count_documents({"_id": {"$in": [ObjectId(cid) for cid in movie.cast]}}) != len(movie.cast):
         raise HTTPException(status_code=404, detail="One or more cast members not found")
     if await db["genre"].count_documents({"_id": {"$in": [ObjectId(gid) for gid in movie.genre]}}) != len(movie.genre):
@@ -120,39 +164,55 @@ async def create_movie(movie: MovieIn):
     doc["cast"] = [ObjectId(cid) for cid in doc["cast"]]
     doc["genre"] = [ObjectId(gid) for gid in doc["genre"]]
     result = await db["movies"].insert_one(doc)
-    # Populate output
+    # Fetch full directed_by object
     directed_by_doc = await db["crew"].find_one({"_id": doc["directed_by"]})
+    directed_by = None
+    if directed_by_doc:
+        directed_by = CrewRef(id=str(directed_by_doc["_id"]), name=directed_by_doc["name"])
+    # Fetch full cast objects
     cast_docs = db["crew"].find({"_id": {"$in": doc["cast"]}})
+    cast = [CrewRef(id=str(c["_id"]), name=c["name"]) async for c in cast_docs]
+    # Fetch full genre objects
     genre_docs = db["genre"].find({"_id": {"$in": doc["genre"]}})
+    genre = [GenreRef(id=str(g["_id"]), name=g["name"]) async for g in genre_docs]
     return MovieOut(
         id=str(result.inserted_id),
         title=movie.title,
         description=movie.description,
-        directed_by=directed_by_doc["name"] if directed_by_doc else None,
-        cast=[doc["name"] async for doc in cast_docs],
-        genre=[doc["name"] async for doc in genre_docs],
+        directed_by=directed_by,
+        cast=cast,
+        genre=genre,
     )
 
 @app.get("/api/movies/{movie_id}", response_model=MovieOut)
 async def get_movie(movie_id: str = Path(..., description="MongoDB ObjectId of the movie")):
     """
-    Get details for a specific movie by its ID.
+    Get details for a specific movie by its ID. Returns full objects for directed_by, cast, and genre fields.
     """
     if not ObjectId.is_valid(movie_id):
         raise HTTPException(status_code=400, detail="Invalid movie id")
     movie = await db["movies"].find_one({"_id": ObjectId(movie_id)})
     if not movie:
         raise HTTPException(status_code=404, detail="Movie not found")
+    # Fetch full directed_by object
     directed_by_doc = await db["crew"].find_one({"_id": movie["directed_by"]})
+    directed_by = None
+    if directed_by_doc:
+        directed_by = CrewRef(id=str(directed_by_doc["_id"]), name=directed_by_doc["name"])
+    # Fetch full cast objects
     cast_docs = db["crew"].find({"_id": {"$in": movie["cast"]}})
+    cast = [CrewRef(id=str(doc["_id"]), name=doc["name"]) async for doc in cast_docs]
+    # Fetch full genre objects
     genre_docs = db["genre"].find({"_id": {"$in": movie["genre"]}})
+    genre = [GenreRef(id=str(doc["_id"]), name=doc["name"]) async for doc in genre_docs]
+    # Return MovieOut with full objects for related fields
     return MovieOut(
         id=str(movie["_id"]),
         title=movie["title"],
         description=movie.get("description"),
-        directed_by=directed_by_doc["name"] if directed_by_doc else None,
-        cast=[doc["name"] async for doc in cast_docs],
-        genre=[doc["name"] async for doc in genre_docs],
+        directed_by=directed_by,
+        cast=cast,
+        genre=genre,
     )
 
 @app.get("/api/crew", response_model=List[CrewOut])
@@ -195,9 +255,26 @@ async def get_crew(crew_id: str = Path(..., description="MongoDB ObjectId of the
     return CrewOut(id=str(crew["_id"]), name=crew["name"])
 
 @app.get("/api/genre", response_model=List[GenreOut])
-async def list_genre():
+async def list_genre(
+    name: Optional[str] = Query(
+        None,
+        description="Partial or full genre name (case-insensitive)",
+        openapi_extra={
+            "examples": [
+                {"summary": "Partial name", "value": "act"},
+                {"summary": "Full name", "value": "Action"}
+            ]
+        }
+    )
+):
+    """
+    List all genres, or filter by partial (case-insensitive) name.
+    """
+    query = {}
+    if name:
+        query["name"] = {"$regex": name, "$options": "i"}
     genres = []
-    cursor = db["genre"].find()
+    cursor = db["genre"].find(query)
     async for genre in cursor:
         genres.append(GenreOut(id=str(genre["_id"]), name=genre["name"]))
     return genres
@@ -223,14 +300,16 @@ async def create_role(role: RoleIn):
     return RoleOut(id=str(result.inserted_id), title=role.title)
 
 # TODO: Remove debug endpoint.
-@app.post("/api/clear", status_code=204)
+@app.post("/api/clear", status_code=200)
 async def clear_db():
     try:
         collections = await db.list_collection_names()
+        cleared = []
         # Exclude system collections - TODO: Verify this.
         for collection in collections:
             if not collection.startswith("system."):
                 await db[collection].delete_many({})
-        return
+                cleared.append(collection)
+        return {"message": "Database cleared", "cleared_collections": cleared}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

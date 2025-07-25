@@ -1,37 +1,38 @@
 import { useEffect, useState } from "react";
 import { listMovies } from "../models/movie";
+import MovieFilters from "../components/MovieFilters";
+import Gallery from "../components/Gallery";
 
-function Movies() {
+export default function Movies() {
   const [movies, setMovies] = useState([]);
+  const [filters, setFilters] = useState({
+    title: "",
+    director: "",
+    cast: "",
+    genre: ""
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState();
   useEffect(() => {
     setIsLoading(true);
-    listMovies()
+    listMovies(filters)
       .then(setMovies)
       .catch(error => setError(error?.message))
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [filters]);
   return (
     <main>
-      <header><h1>Movies</h1></header>
+      <header><h1>Explore Movies</h1></header>
+      <MovieFilters values={filters} onChange={setFilters} />
       {movies?.length ? (
-        <div className="card gallery">
-          {movies.map(movie => (
-            <a key={movie.id} href={`/movies/${movie.id}`}>
-              <div className="card image-thumb">
-              </div>
-              <span>{movie.title}</span>
-            </a>
-          ))}
-        </div>
+        <Gallery movies={movies} />
       ) : isLoading ? (
         <div>Loading....</div>
       ) : error ? (
         <div>Looks like we ran into an unexpected error</div>
-      ) : null}
+      ) : (
+        <div>There are no movies to show. Try resetting filters.</div>
+      )}
     </main>
   )
 }
-
-export default Movies;

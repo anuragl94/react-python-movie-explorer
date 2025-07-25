@@ -1,5 +1,6 @@
 :root {
   --color-bg: light-dark(#fff, #242424);
+  --color-bg-darker: light-dark(#eaeaea, #1a1a1a);
   --color-text: light-dark(#213547, rgb(255 255 255 / 0.87));
 
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;

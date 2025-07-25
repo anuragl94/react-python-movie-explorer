@@ -6,7 +6,7 @@ from typing import Optional, List
 class MongoModel(BaseModel):
     id: Optional[str] = None  # Always use 'id' in API responses
 
-# Item model (unchanged, but add id for consistency)
+# Item model
 class Item(MongoModel):
     name: str
     description: Optional[str] = None
@@ -16,6 +16,15 @@ class Item(MongoModel):
 ## and GET requests would automatically be more verbose by returning full names as strings, for example
 ## I am sure that there is a simpler way, but in the interest of time, I'm creating Base, In, Out, Filter models for this purpose.
 ## Plus, it looks like even the documentation for Pydantic follows this pattern, so I'll stick with this for now.
+
+# Reference models for nested objects in MovieOut
+class CrewRef(BaseModel):
+    id: str
+    name: str
+
+class GenreRef(BaseModel):
+    id: str
+    name: str
 
 # Movie
 class MovieBase(BaseModel):
@@ -28,15 +37,15 @@ class MovieIn(MovieBase):
     genre: List[str]  # List of Genre ObjectIds as strings
 
 class MovieOut(MovieBase, MongoModel):
-    directed_by: str  # Crew name (populated in API response)
-    cast: List[str]   # Crew names
-    genre: List[str]  # Genre names
+    directed_by: Optional[CrewRef]  # Full object for director
+    cast: List[CrewRef]             # List of full objects for cast
+    genre: List[GenreRef]           # List of full objects for genres
 
 class MovieFilter(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
-    directed_by: Optional[str] = None
-    cast: Optional[List[str]] = None
+    directed_by: Optional[List[str]] = None  # Accept multiple director ids
+    cast: Optional[List[str]] = None         # Accept multiple cast ids
     genre: Optional[List[str]] = None
 
 # Crew (Everyone involved with a movie)

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { getDetails } from "../models/crew";
 import { listMovies } from "../models/movie";
+import Gallery from "../components/Gallery";
 
-function Movie() {
+export default function Movie() {
   const [data, setData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState();
@@ -20,18 +21,17 @@ function Movie() {
   const [personalDetails, moviesDirectedbyPerson, moviesStarringPerson] = data;
   return (
     <main>
-      {data ? (
+      {data.length ? (
         <>
-          <header><h1>{data.name}</h1></header>
-          <pre>
-            {JSON.stringify(personalDetails, null, 2)}
-          </pre>
-          <pre>
-            {JSON.stringify(moviesDirectedbyPerson, null, 2)}
-          </pre>
-          <pre>
-            {JSON.stringify(moviesStarringPerson, null, 2)}
-          </pre>
+          <header><h1>{personalDetails?.name}</h1></header>
+          <h2>Director of</h2>
+          {moviesDirectedbyPerson.length ? (
+            <Gallery movies={moviesDirectedbyPerson} />
+          ) : null}
+          <h2>Starred in</h2>
+          {moviesDirectedbyPerson.length ? (
+            <Gallery movies={moviesStarringPerson} />
+          ) : null}
         </>
       ) : isLoading ? (
         <div>Loading....</div>
@@ -41,5 +41,3 @@ function Movie() {
     </main>
   )
 }
-
-export default Movie;

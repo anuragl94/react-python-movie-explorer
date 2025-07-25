@@ -1,10 +1,9 @@
 import { Link } from "react-router-dom";
 
-function Home() {
-
+export default function Page404() {
   return (
-    <div>Page not found. Go back to <Link to="/home">Home</Link> page.</div>
+    <main>
+      <div>Page not found. Go back to <Link to="/home">Home</Link> page.</div>
+    </main>
   )
 }
-
-export default Home
