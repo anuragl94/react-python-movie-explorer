@@ -69,7 +69,6 @@ async function createMovieSmartly(data, logger) {
 }
 
 async function loadPreset(preset, outputEl) {
-  console.log(preset, outputEl);
   const logger = (text) => outputEl.innerHTML += `${text}<br>`;
 
   await clearDB(outputEl);

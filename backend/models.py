@@ -4,81 +4,92 @@ from typing import Optional, List
 
 # Shared base for MongoDB id
 class MongoModel(BaseModel):
-    id: Optional[str] = None  # Always use 'id' in API responses
+    """Base model that includes an optional ID field for API responses."""
+    id: Optional[str] = None
 
 # Item model
 class Item(MongoModel):
+    """Generic item model for testing purposes."""
     name: str
     description: Optional[str] = None
     price: float
 
-## Note for reviewer: I wanted to create single models for each entity such that CREATE requests would expect ids for related entities,
-## and GET requests would automatically be more verbose by returning full names as strings, for example
-## I am sure that there is a simpler way, but in the interest of time, I'm creating Base, In, Out, Filter models for this purpose.
-## Plus, it looks like even the documentation for Pydantic follows this pattern, so I'll stick with this for now.
-
 # Reference models for nested objects in MovieOut
 class CrewRef(BaseModel):
+    """Reference to a crew member with ID and name."""
     id: str
     name: str
 
 class GenreRef(BaseModel):
+    """Reference to a genre with ID and name."""
     id: str
     name: str
 
-# Movie
+# Movie models
 class MovieBase(BaseModel):
-    title: str
-    description: Optional[str] = None
-    release_year: int = Field(..., description="Year the movie was released in")
+    """Base movie model with common fields."""
+    title: str = Field(..., description="Movie title")
+    description: Optional[str] = Field(None, description="Movie description")
+    release_year: int = Field(..., description="Year the movie was released")
     image_url: Optional[HttpUrl] = Field(None, description="URL to the movie's poster or image")
     user_rating: Optional[conint(ge=1, le=100)] = Field(None, description="User rating between 1 and 100")
 
 class MovieIn(MovieBase):
-    directed_by: str  # MongoDB ObjectId as string
-    cast: List[str]   # List of Crew ObjectIds as strings
-    genre: List[str]  # List of Genre ObjectIds as strings
+    """Movie model for creating new movies (requires IDs for related entities)."""
+    directed_by: str = Field(..., description="Director's crew ID (MongoDB ObjectId)")
+    cast: List[str] = Field(..., description="List of cast member IDs (MongoDB ObjectIds)")
+    genre: List[str] = Field(..., description="List of genre IDs (MongoDB ObjectIds)")
 
 class MovieOut(MovieBase, MongoModel):
-    directed_by: Optional[CrewRef]  # Full object for director
-    cast: List[CrewRef]             # List of full objects for cast
-    genre: List[GenreRef]           # List of full objects for genres
+    """Movie model for API responses (includes full objects for related entities)."""
+    directed_by: Optional[CrewRef] = Field(None, description="Director information")
+    cast: List[CrewRef] = Field(default_factory=list, description="List of cast members")
+    genre: List[GenreRef] = Field(default_factory=list, description="List of genres")
 
 class MovieFilter(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    release_year: Optional[int] = Field(None, description="Year the movie was released in")
-    directed_by: Optional[List[str]] = None  # Accepts multiple director ids
-    cast: Optional[List[str]] = None         # Accepts multiple cast ids
-    genre: Optional[List[str]] = None
+    """Filter model for movie queries."""
+    title: Optional[str] = Field(None, description="Partial movie title (case-insensitive)")
+    description: Optional[str] = Field(None, description="Exact movie description")
+    release_year: Optional[int] = Field(None, description="Year the movie was released")
+    directed_by: Optional[List[str]] = Field(None, description="List of director IDs")
+    cast: Optional[List[str]] = Field(None, description="List of cast member IDs")
+    genre: Optional[List[str]] = Field(None, description="List of genre IDs")
 
-# Crew (Everyone involved with a movie)
+# Crew models
 class CrewBase(BaseModel):
-    name: str
+    """Base crew model with common fields."""
+    name: str = Field(..., description="Crew member's name")
 
 class CrewIn(CrewBase):
+    """Crew model for creating new crew members."""
     pass
 
 class CrewOut(CrewBase, MongoModel):
-    # Add list of associated movies???
+    """Crew model for API responses."""
     pass
 
-# Role (Actor, Director, Producer, ...)
+# Role models
 class RoleBase(BaseModel):
-    title: str
+    """Base role model with common fields."""
+    title: str = Field(..., description="Role title (e.g., Actor, Director, Producer)")
 
 class RoleIn(RoleBase):
+    """Role model for creating new roles."""
     pass
 
 class RoleOut(RoleBase, MongoModel):
+    """Role model for API responses."""
     pass
 
-# Genre
+# Genre models
 class GenreBase(BaseModel):
-    name: str
+    """Base genre model with common fields."""
+    name: str = Field(..., description="Genre name")
 
 class GenreIn(GenreBase):
+    """Genre model for creating new genres."""
     pass
 
 class GenreOut(GenreBase, MongoModel):
+    """Genre model for API responses."""
     pass
